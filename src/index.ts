@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import express from "express";
-import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { setupOAuth } from "./oauth.js";
 
 // @ts-ignore — accessing unexported internals of @kirbah/mcp-youtube
 import { createMcpServer } from "@kirbah/mcp-youtube/dist/server.js";
@@ -21,17 +21,26 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-function validateToken(req: express.Request): boolean {
-  const auth = req.headers.authorization;
-  if (!auth) return false;
-  const token = auth.replace(/^Bearer\s+/i, "");
-  if (token.length !== AUTH_TOKEN!.length) return false;
-  return timingSafeEqual(Buffer.from(token), Buffer.from(AUTH_TOKEN!));
+const oauthClientId = process.env.MCP_OAUTH_CLIENT_ID;
+const oauthClientSecret = process.env.MCP_OAUTH_CLIENT_SECRET;
+const publicUrl = process.env.PUBLIC_URL;
+
+if (!oauthClientId || !oauthClientSecret || !publicUrl) {
+  console.error("ERROR: MCP_OAUTH_CLIENT_ID, MCP_OAUTH_CLIENT_SECRET, and PUBLIC_URL are required");
+  process.exit(1);
 }
 
 async function main(): Promise<void> {
   const app = express();
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+
+  const { validateToken } = setupOAuth(app, {
+    clientId: oauthClientId!,
+    clientSecret: oauthClientSecret!,
+    publicUrl: publicUrl!,
+    staticToken: AUTH_TOKEN,
+  });
 
   app.post("/mcp", async (req, res) => {
     if (!validateToken(req)) {
