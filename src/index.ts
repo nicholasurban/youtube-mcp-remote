@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-// @ts-ignore — package internals
+// @ts-ignore — accessing unexported internals of @kirbah/mcp-youtube
 import { createMcpServer } from "@kirbah/mcp-youtube/dist/server.js";
 // @ts-ignore
 import { initializeContainer } from "@kirbah/mcp-youtube/dist/container.js";
@@ -23,13 +24,12 @@ if (!API_KEY) {
 function validateToken(req: express.Request): boolean {
   const auth = req.headers.authorization;
   if (!auth) return false;
-  return auth.replace(/^Bearer\s+/i, "") === AUTH_TOKEN;
+  const token = auth.replace(/^Bearer\s+/i, "");
+  if (token.length !== AUTH_TOKEN!.length) return false;
+  return timingSafeEqual(Buffer.from(token), Buffer.from(AUTH_TOKEN!));
 }
 
 async function main(): Promise<void> {
-  const container = initializeContainer({ apiKey: API_KEY as string });
-  const server = createMcpServer(container);
-
   const app = express();
   app.use(express.json());
 
@@ -42,9 +42,20 @@ async function main(): Promise<void> {
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    res.on("close", () => transport.close());
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    try {
+      // Create fresh server per request to avoid connect() race condition
+      const container = initializeContainer({ apiKey: API_KEY as string });
+      const server = createMcpServer(container);
+      res.on("close", () => transport.close());
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error("MCP request error:", err);
+      await transport.close().catch(() => {});
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
   });
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
