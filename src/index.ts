@@ -7,6 +7,8 @@ import { setupOAuth } from "./oauth.js";
 import { createMcpServer } from "@kirbah/mcp-youtube/dist/server.js";
 // @ts-ignore
 import { initializeContainer } from "@kirbah/mcp-youtube/dist/container.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerWriteTools } from "./write-tools.js";
 
 const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
 const API_KEY = process.env.YOUTUBE_API_KEY;
@@ -54,7 +56,8 @@ async function main(): Promise<void> {
     try {
       // Create fresh server per request to avoid connect() race condition
       const container = initializeContainer({ apiKey: API_KEY as string });
-      const server = createMcpServer(container);
+      const server = createMcpServer(container) as McpServer;
+      registerWriteTools(server);
       res.on("close", () => transport.close());
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
