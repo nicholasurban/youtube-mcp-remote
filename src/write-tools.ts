@@ -115,8 +115,9 @@ export function registerWriteTools(server: McpServer): void {
     "deleteComment",
     {
       description:
-        "Permanently delete a YouTube comment (top-level or reply) on your channel. " +
-        "This action is irreversible. Use commentId from getVideoComments or getChannelComments.",
+        "Delete a comment or reply that YOU (the channel owner) posted. " +
+        "NOTE: The YouTube API only allows deleting your OWN comments/replies — not other people's comments. " +
+        "To hide other people's hostile comments, use moderateComment with status='rejected' instead.",
       inputSchema: {
         commentId: z
           .string()
