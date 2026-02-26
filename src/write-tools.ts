@@ -1,12 +1,13 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getYouTubeAccessToken } from "./youtube-token.js";
+import { trimResponse } from "./trim.js";
 
-const YT_API = "https://www.googleapis.com/youtube/v3";
-const YT_ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2";
+export const YT_API = "https://www.googleapis.com/youtube/v3";
+export const YT_ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2";
 
 /** Call the YouTube API with an OAuth Bearer token. Returns parsed JSON or throws. */
-async function ytFetch(url: string, options: RequestInit = {}): Promise<unknown> {
+export async function ytFetch(url: string, options: RequestInit = {}): Promise<unknown> {
   const token = await getYouTubeAccessToken();
   const res = await fetch(url, {
     ...options,
@@ -104,7 +105,7 @@ export function registerWriteTools(server: McpServer): void {
 
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify(comments, null, 2) },
+          { type: "text" as const, text: JSON.stringify(trimResponse(comments), null, 2) },
         ],
       };
     }
@@ -164,7 +165,7 @@ export function registerWriteTools(server: McpServer): void {
         }),
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
       };
     }
   );
@@ -236,7 +237,7 @@ export function registerWriteTools(server: McpServer): void {
         }),
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
       };
     }
   );
@@ -336,7 +337,7 @@ export function registerWriteTools(server: McpServer): void {
         body: JSON.stringify({ id: videoId, snippet: updatedSnippet }),
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
       };
     }
   );
@@ -386,7 +387,7 @@ export function registerWriteTools(server: McpServer): void {
 
       const body = await ytFetch(url.toString());
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(body, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
       };
     }
   );

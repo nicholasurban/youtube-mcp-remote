@@ -9,6 +9,8 @@ import { createMcpServer } from "@kirbah/mcp-youtube/dist/server.js";
 import { initializeContainer } from "@kirbah/mcp-youtube/dist/container.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerWriteTools } from "./write-tools.js";
+import { registerAnalyticsTools } from "./analytics-tools.js";
+import { registerDiscoveryTools } from "./discovery-tools.js";
 
 const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
 const API_KEY = process.env.YOUTUBE_API_KEY;
@@ -58,6 +60,8 @@ async function main(): Promise<void> {
       const container = initializeContainer({ apiKey: API_KEY as string });
       const server = createMcpServer(container) as McpServer;
       registerWriteTools(server);
+      registerAnalyticsTools(server);
+      registerDiscoveryTools(server);
       res.on("close", () => transport.close());
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
