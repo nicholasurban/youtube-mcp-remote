@@ -40,6 +40,7 @@ export interface Handler<T = unknown> {
 }
 
 export interface McpContent {
+  [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;
 }
 
