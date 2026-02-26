@@ -13,6 +13,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 ENV PORT=3000
+ENV DATA_DIR=/data
+VOLUME /data
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -f http://localhost:3000/health || exit 1
 CMD ["node", "dist/index.js"]
