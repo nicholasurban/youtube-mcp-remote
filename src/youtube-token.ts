@@ -1,6 +1,15 @@
 /**
- * Manages YouTube Data API OAuth 2.0 access token.
- * Exchanges YOUTUBE_REFRESH_TOKEN for a short-lived access token and caches it.
+ * Manages YouTube Data API OAuth 2.0 access tokens.
+ * Supports multiple channels under the same Google account via per-channel refresh tokens.
+ *
+ * Env vars:
+ *   YOUTUBE_REFRESH_TOKEN      — default channel (@outliyr)
+ *   YOUTUBE_REFRESH_TOKEN_HPL  — High Performance Longevity channel
+ *   YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET — shared OAuth app credentials
+ *
+ * Channel mapping:
+ *   UCYD_-2jbMxu0Lp65IlcGf5w → YOUTUBE_REFRESH_TOKEN_HPL
+ *   anything else (or omitted) → YOUTUBE_REFRESH_TOKEN
  */
 
 interface TokenCache {
@@ -8,25 +17,56 @@ interface TokenCache {
   expiresAt: number;
 }
 
-let tokenCache: TokenCache | null = null;
+const HPL_CHANNEL_ID = "UCYD_-2jbMxu0Lp65IlcGf5w";
 
-export async function getYouTubeAccessToken(): Promise<string> {
-  const now = Date.now();
-  // Return cached token if still valid (5-min buffer before expiry)
-  if (tokenCache && tokenCache.expiresAt - 5 * 60 * 1000 > now) {
-    return tokenCache.token;
-  }
+/** Per-refresh-token cache keyed by the refresh token itself */
+const tokenCacheMap = new Map<string, TokenCache>();
 
+/**
+ * Returns the refresh token for a given channel ID.
+ * Falls back to default if no channel-specific token is configured.
+ */
+function getRefreshTokenForChannel(channelId?: string): string {
   const clientId = process.env.YOUTUBE_CLIENT_ID;
   const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-  const refreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
+  if (!clientId || !clientSecret) {
     throw new Error(
       "YouTube OAuth credentials not configured. " +
-        "Set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REFRESH_TOKEN env vars."
+        "Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET env vars."
     );
   }
+
+  if (channelId === HPL_CHANNEL_ID) {
+    const hplToken = process.env.YOUTUBE_REFRESH_TOKEN_HPL;
+    if (hplToken) return hplToken;
+    // Fall through to default if HPL token not yet configured
+  }
+
+  const defaultToken = process.env.YOUTUBE_REFRESH_TOKEN;
+  if (!defaultToken) {
+    throw new Error(
+      "YouTube OAuth credentials not configured. Set YOUTUBE_REFRESH_TOKEN env var."
+    );
+  }
+  return defaultToken;
+}
+
+/**
+ * Get an access token, optionally for a specific channel.
+ * @param channelId — pass a channel ID to use that channel's refresh token
+ */
+export async function getYouTubeAccessToken(channelId?: string): Promise<string> {
+  const refreshToken = getRefreshTokenForChannel(channelId);
+  const now = Date.now();
+
+  // Check cache for this specific refresh token
+  const cached = tokenCacheMap.get(refreshToken);
+  if (cached && cached.expiresAt - 5 * 60 * 1000 > now) {
+    return cached.token;
+  }
+
+  const clientId = process.env.YOUTUBE_CLIENT_ID!;
+  const clientSecret = process.env.YOUTUBE_CLIENT_SECRET!;
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -45,9 +85,9 @@ export async function getYouTubeAccessToken(): Promise<string> {
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number };
-  tokenCache = {
+  tokenCacheMap.set(refreshToken, {
     token: data.access_token,
     expiresAt: now + data.expires_in * 1000,
-  };
-  return tokenCache.token;
+  });
+  return data.access_token;
 }

@@ -7,8 +7,8 @@ export const YT_API = "https://www.googleapis.com/youtube/v3";
 export const YT_ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2";
 
 /** Call the YouTube API with an OAuth Bearer token. Returns parsed JSON or throws. */
-export async function ytFetch(url: string, options: RequestInit = {}): Promise<unknown> {
-  const token = await getYouTubeAccessToken();
+export async function ytFetch(url: string, options: RequestInit = {}, channelId?: string): Promise<unknown> {
+  const token = await getYouTubeAccessToken(channelId);
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -166,12 +166,10 @@ export function registerWriteTools(server: McpServer): void {
     async ({ parentId, text, channelId }) => {
       const url = new URL(`${YT_API}/comments`);
       url.searchParams.set("part", "snippet");
-      const snippet: Record<string, string> = { parentId, textOriginal: text };
-      if (channelId) snippet.channelId = channelId;
       const body = await ytFetch(url.toString(), {
         method: "POST",
-        body: JSON.stringify({ snippet }),
-      });
+        body: JSON.stringify({ snippet: { parentId, textOriginal: text } }),
+      }, channelId);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
       };
