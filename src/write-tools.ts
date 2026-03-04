@@ -145,24 +145,32 @@ export function registerWriteTools(server: McpServer): void {
     {
       description:
         "Post a reply to a YouTube comment as the channel owner. " +
-        "parentId is the top-level commentId from getVideoComments or getChannelComments.",
+        "parentId is the top-level commentId from getVideoComments or getChannelComments. " +
+        "Use channelId to post as a specific brand account (e.g. High Performance Longevity) " +
+        "when the authenticated Google account owns multiple channels.",
       inputSchema: {
         parentId: z
           .string()
           .min(1)
           .describe("The commentId of the top-level comment to reply to"),
         text: z.string().min(1).describe("Text content of the reply"),
+        channelId: z
+          .string()
+          .optional()
+          .describe(
+            "Channel ID to post as (for brand accounts). Omit to use the default authenticated channel."
+          ),
       },
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
-    async ({ parentId, text }) => {
+    async ({ parentId, text, channelId }) => {
       const url = new URL(`${YT_API}/comments`);
       url.searchParams.set("part", "snippet");
+      const snippet: Record<string, string> = { parentId, textOriginal: text };
+      if (channelId) snippet.channelId = channelId;
       const body = await ytFetch(url.toString(), {
         method: "POST",
-        body: JSON.stringify({
-          snippet: { parentId, textOriginal: text },
-        }),
+        body: JSON.stringify({ snippet }),
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(trimResponse(body), null, 2) }],
