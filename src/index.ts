@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { setupOAuth } from "./oauth.js";
 
 // @ts-ignore — accessing unexported internals of @kirbah/mcp-youtube
@@ -72,6 +73,37 @@ async function main(): Promise<void> {
         res.status(500).json({ error: "Internal server error" });
       }
     }
+  });
+
+  // ─── SSE transport (for Claude Code CLI) ──────────────────────────────────
+  const sseTransports = new Map<string, SSEServerTransport>();
+
+  app.get("/sse", async (req, res) => {
+    if (!validateToken(req)) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const transport = new SSEServerTransport("/messages", res);
+    sseTransports.set(transport.sessionId, transport);
+    res.on("close", () => {
+      sseTransports.delete(transport.sessionId);
+    });
+    const container = initializeContainer({ apiKey: API_KEY as string });
+    const server = createMcpServer(container) as McpServer;
+    registerWriteTools(server);
+    registerAnalyticsTools(server);
+    registerDiscoveryTools(server);
+    await server.connect(transport);
+  });
+
+  app.post("/messages", async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = sseTransports.get(sessionId);
+    if (!transport) {
+      res.status(400).json({ error: "Unknown session" });
+      return;
+    }
+    await transport.handlePostMessage(req, res, req.body);
   });
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
