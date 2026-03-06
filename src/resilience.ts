@@ -50,7 +50,7 @@ export interface McpContent {
 
 function ensureDataDir(): void {
   if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true }); // may throw if fs is read-only
   }
 }
 
@@ -64,8 +64,13 @@ function loadHealth(): HealthState {
 }
 
 function saveHealth(state: HealthState): void {
-  ensureDataDir();
-  writeFileSync(HEALTH_FILE, JSON.stringify(state, null, 2), "utf-8");
+  try {
+    ensureDataDir();
+    writeFileSync(HEALTH_FILE, JSON.stringify(state, null, 2), "utf-8");
+  } catch (err) {
+    // Persistence is best-effort — never let it crash tool execution.
+    console.error("[resilience] Failed to persist health state:", err);
+  }
 }
 
 // ---------------------------------------------------------------------------
